@@ -79,16 +79,24 @@ function cleanup() {
 const progress = new WorkerProgress(0); // Will be updated when tasks arrive
 
 // Update message handling with cleanup
-parentPort.on('message', async (message) => {
-    if (message.type === 'stop') {
+parentPort.on('message', async (task) => {
+    if (task.type === 'stop') {
         cleanup();
         process.exit(0);
     }
     
-    if (message.type === 'process') {
+    if (task.type === 'process') {
         const startTime = Date.now();
         try {
-            await processWallet(message.data);
+            const { wallet, proxy, walletIndex, totalWallets } = task.data;
+            const automation = new KiteAIAutomation(
+                wallet,
+                proxy ? [proxy] : [],
+                `${workerData.workerIndex}-${wallet.slice(0, 6)}`,
+                walletIndex,
+                totalWallets
+            );
+            await automation.run();
             const totalTime = ((Date.now() - startTime) / 1000).toFixed(2);
             parentPort.postMessage({ 
                 type: 'complete',
@@ -106,7 +114,7 @@ parentPort.on('message', async (message) => {
             });
             progress.update(false);
         }
-        message.data = null;
+        task.data = null;
     }
 });
 

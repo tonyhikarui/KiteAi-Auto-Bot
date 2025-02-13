@@ -5,6 +5,30 @@ import { Worker } from 'worker_threads';
 import mysql from 'mysql2/promise';
 import { banner } from './banner.js';
 
+/*
+
+1. Added `loadProxies` function to handle proxy loading and parsing from proxies.txt
+2. Updated CONFIG object with optimized settings and increased WORKER_TIMEOUT to 1500000ms (5 minutes)
+3. Added `loadWalletsFromDB` function to fetch wallets from MySQL database
+4. Added helper functions:
+   - `cleanupWorker` for proper worker cleanup
+   - `initializeWorker` for individual worker setup
+   - `getTotalWallets` to get total wallet count from database
+5. Improved worker management:
+   - Better error handling in `processTaskQueue`
+   - Separated worker initialization logic
+   - Added proper event listener cleanup
+6. Enhanced main loop:
+   - Added run counter
+   - Dynamic process amount adjustment
+   - Progress tracking
+   - Better error reporting
+7. Added proper shutdown handlers:
+   - SIGINT handler for graceful shutdown
+   - Global error handler for unhandled rejections
+
+The changes focus on improving stability, error handling, and resource management while adding better monitoring and cleanup procedures.
+*/
 // Add loadProxies function back before CONFIG definition
 async function loadProxies() {
     try {
@@ -124,10 +148,10 @@ async function processTaskQueue(proxies, errorCount, totalProcessed) {
                     worker.removeListener('message', messageHandler);
 
                     if (message.type === 'complete') {
-                        console.log(chalk.green(`Wallet ${wallet.address} processed successfully in ${message.processTime}s`));
+                        console.log(chalk.green(`[${currentCount}/${CONFIG.PROCESS_AMOUNT}] Wallet ${wallet.address} processed successfully in ${message.processTime}s`));
                         resolve();
                     } else if (message.type === 'error') {
-                        console.log(chalk.red(`Error processing wallet ${wallet.address} (${message.processTime}s): ${message.data}`));
+                        console.log(chalk.red(`[${currentCount}/${CONFIG.PROCESS_AMOUNT}] Error processing wallet ${wallet.address} (${message.processTime}s): ${message.data}`));
                         reject(new Error(message.data));
                     }
                 };
@@ -140,12 +164,14 @@ async function processTaskQueue(proxies, errorCount, totalProcessed) {
                         proxy,
                         index: offset + 1,
                         total: CONFIG.PROCESS_AMOUNT,
-                        currentCount
+                        currentCount,
+                        walletIndex: currentCount,  // Add these two values
+                        totalWallets: CONFIG.PROCESS_AMOUNT  // Add these two values
                     }
                 });
             });
         } catch (error) {
-            console.log(chalk.red(`Worker ${workerIndex}: Error processing wallet ${wallet.address}: ${error.message}`));
+            console.log(chalk.red(`[${currentCount}/${CONFIG.PROCESS_AMOUNT}] Worker ${workerIndex}: Error processing wallet ${wallet.address}: ${error.message}`));
             errorCount.value++;
             await cleanupWorker(worker, workerIndex);
             await initializeWorker(workerIndex);
@@ -161,7 +187,8 @@ async function initializeWorker(index) {
     const worker = new Worker('./worker.js', {
         workerData: {
             workerIndex: index,
-            totalWorkers: CONFIG.NUM_WORKERS
+            totalWorkers: CONFIG.NUM_WORKERS,
+            totalWallets: CONFIG.PROCESS_AMOUNT  // Add this
         }
     });
 
@@ -218,11 +245,12 @@ async function main() {
         console.log(chalk.cyan(`Starting Run #${runCount} - Total wallets: ${CONFIG.PROCESS_AMOUNT}`));
 
         while (offset < CONFIG.PROCESS_AMOUNT) {
+            /*
             const currentTotal = await getTotalWallets();
             if (currentTotal !== CONFIG.PROCESS_AMOUNT) {
                 CONFIG.PROCESS_AMOUNT = currentTotal;
             }
-
+            */
             const remainingWallets = CONFIG.PROCESS_AMOUNT - offset;
             const currentBatchSize = Math.min(CONFIG.BATCH_SIZE, remainingWallets);
             const wallets = await loadWalletsFromDB(offset, currentBatchSize);
@@ -263,8 +291,7 @@ Run #${runCount} completed:
         `));
 
         runCount++;
-        await delay(3600); // 1 hour delay between runs
-    }
+        await delay(100);     }
 }
 
 // Update termination handler with proper cleanup

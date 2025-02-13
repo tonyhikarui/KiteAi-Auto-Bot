@@ -109,7 +109,7 @@ function createAgent(proxy) {
         : new HttpsProxyAgent(proxyUrl);
 }
 export class KiteAIAutomation {
-    constructor(walletAddress, proxyList = [], sessionId) {
+    constructor(walletAddress, proxyList = [], sessionId, walletIndex = 0, totalWallets = 0) {
         this.session = new WalletSession(walletAddress, sessionId);
         this.proxyList = proxyList;
         this.currentProxyIndex = 0;
@@ -117,6 +117,8 @@ export class KiteAIAutomation {
         this.POINTS_PER_INTERACTION = 10;
         this.MAX_DAILY_INTERACTIONS = this.MAX_DAILY_POINTS / this.POINTS_PER_INTERACTION;
         this.isRunning = true;
+        this.walletIndex = walletIndex;
+        this.totalWallets = totalWallets;
     }
 
     getCurrentProxy() {
@@ -136,7 +138,8 @@ export class KiteAIAutomation {
         const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
         const sessionPrefix = chalk.blue(`[Session ${this.session.sessionId}]`);
         const walletPrefix = chalk.green(`[${this.session.walletAddress.slice(0, 6)}...]`);
-        console.log(`${chalk.yellow(`[${timestamp}]`)} ${sessionPrefix} ${walletPrefix} ${chalk[color](`${emoji} ${message}`)}`);
+        const walletCountPrefix = chalk.magenta(`[${this.walletIndex}/${this.totalWallets}]`);
+        console.log(`${chalk.yellow(`[${timestamp}]`)} ${sessionPrefix} ${walletCountPrefix} ${walletPrefix} ${chalk[color](`${emoji} ${message}`)}`);
     }
 
     resetDailyPoints() {
@@ -213,8 +216,9 @@ export class KiteAIAutomation {
             });
 
             const sessionPrefix = chalk.blue(`[Session ${this.session.sessionId}]`);
+            const walletCountPrefix = chalk.magenta(`[${this.walletIndex}/${this.totalWallets}]`);
             const walletPrefix = chalk.green(`[${this.session.walletAddress.slice(0, 6)}...]`);
-            process.stdout.write(`${sessionPrefix} ${walletPrefix} ${chalk.cyan('🤖 AI Response: ')}`);
+            process.stdout.write(`${sessionPrefix} ${walletCountPrefix} ${walletPrefix} ${chalk.cyan('🤖 AI Response: ')}`);
             
             let accumulatedResponse = "";
 
